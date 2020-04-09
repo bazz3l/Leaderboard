@@ -77,6 +77,49 @@ namespace Oxide.Plugins
         void OnServerSave() => SaveData();
         #endregion
 
+        #region Core
+        List<PlayerData> GetPlayerData(int page, double takeCount)
+        {
+            return storage.Stats.Values.OrderByDescending(i => i.Kills)
+            .Skip((page - 1) * (int)takeCount)
+            .Take((int)takeCount)
+            .ToList();
+        }
+
+        int GetCurrentPage(BasePlayer player)
+        {
+            PlayerUI playerUi;
+
+            if (!PlayersUI.TryGetValue(player.userID, out playerUi))
+            {
+                return 1;
+            }
+
+            return playerUi.page;
+        }
+
+        class PlayerUI
+        {
+            public CuiElementContainer container;
+            public CuiPanel panel;
+            public int page = 1;
+        }
+
+        PlayerData GetStats(BasePlayer player)
+        {
+            PlayerData playerData;
+
+            if (!storage.Stats.TryGetValue(player.userID, out playerData))
+            {
+                playerData = storage.Stats[player.userID] = new PlayerData();
+            }
+
+            playerData.Name = player.displayName;
+
+            return playerData;
+        }
+        #endregion
+
         #region UI
         CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor = false, string parent = "Overlay")
         {
@@ -199,15 +242,18 @@ namespace Oxide.Plugins
             }, panelName);
         }
 
-        void OpenUI(BasePlayer player, int page = 1, double count = 10)
+        void OpenUI(BasePlayer player, int page = 1, double count = 15)
         {
             CuiElementContainer container;
+            
             PlayerUI playerUI;
 
             if(!PlayersUI.TryGetValue(player.userID, out playerUI))
             {
                 playerUI = PlayersUI[player.userID] = new PlayerUI();
             }
+
+            playerUI.page = page;
 
             if (playerUI.container == null)
             {
@@ -271,60 +317,6 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Core
-        List<PlayerData> GetPlayerData(int page, double takeCount)
-        {
-            return storage.Stats.Values.OrderByDescending(i => i.Kills)
-            .Skip((page - 1) * (int)takeCount)
-            .Take((int)takeCount)
-            .ToList();
-        }
-
-        int GetCurrentPage(BasePlayer player)
-        {
-            PlayerUI playerUi;
-
-            if (!PlayersUI.TryGetValue(player.userID, out playerUi))
-            {
-                return 1;
-            }
-
-            return playerUi.page;
-        }
-
-        class PlayerUI
-        {
-            public CuiElementContainer container;
-            public CuiPanel panel;
-            public int page = 1;
-        }
-
-        PlayerData GetStats(BasePlayer player)
-        {
-            PlayerData playerData;
-
-            if (!storage.Stats.TryGetValue(player.userID, out playerData))
-            {
-                playerData = storage.Stats[player.userID] = new PlayerData();
-            }
-
-            playerData.Name = player.displayName;
-
-            return playerData;
-        }
-        #endregion
-
-        #region API
-        [HookMethod("RecordKill")]
-        public void RecordKill(BasePlayer player) => GetStats(player).Kills++;
-
-        [HookMethod("RecordDeath")]
-        public void RecordDeath(BasePlayer player) => GetStats(player).Deaths++;
-
-        [HookMethod("RecordSuicide")]
-        public void RecordSuicide(BasePlayer player) => GetStats(player).Suicides++;
-        #endregion
-
         #region Commands
         [ConsoleCommand("stats.next")]
         void NextPage(ConsoleSystem.Arg arg)
@@ -345,8 +337,6 @@ namespace Oxide.Plugins
             }
 
             OpenUI(player, currentPage, RowAmount);
-
-            PlayersUI[player.userID].page = currentPage;
         }
 
         [ConsoleCommand("stats.prev")]
@@ -368,8 +358,6 @@ namespace Oxide.Plugins
             }
 
             OpenUI(player, currentPage, RowAmount);
-
-            PlayersUI[player.userID].page = currentPage;
         }
 
         [ConsoleCommand("stats.open")]
@@ -397,10 +385,27 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("leaderboard")]
-        void LeaderboardCommand(BasePlayer player, string command, string[] args) => OpenUI(player, 1, RowAmount);
+        void LeaderboardCommand(BasePlayer player, string command, string[] args)
+        {
+            OpenUI(player, 1, RowAmount);
+        }
 
         [ChatCommand("stats")]
-        void StatsCommand(BasePlayer player, string command, string[] args) => player.ChatMessage(GetStats(player).ToString());
+        void StatsCommand(BasePlayer player, string command, string[] args)
+        {
+            player.ChatMessage(GetStats(player).ToString());
+        }
+        #endregion
+
+        #region API
+        [HookMethod("RecordKill")]
+        public void RecordKill(BasePlayer player) => GetStats(player).Kills++;
+
+        [HookMethod("RecordDeath")]
+        public void RecordDeath(BasePlayer player) => GetStats(player).Deaths++;
+
+        [HookMethod("RecordSuicide")]
+        public void RecordSuicide(BasePlayer player) => GetStats(player).Suicides++;
         #endregion
     }
 }
