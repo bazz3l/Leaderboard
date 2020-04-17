@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core.Plugins;
@@ -7,9 +8,9 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Leaderboard", "Bazz3l", "1.0.1")]
+    [Info("Scoreboard", "Bazz3l", "1.0.3")]
     [Description("Display player stats kills deaths and so on.")]
-    class Leaderboard : RustPlugin
+    class Scoreboard : RustPlugin
     {
         #region Fields
         Dictionary<ulong, PlayerUI> PlayersUI = new Dictionary<ulong, PlayerUI>();
@@ -42,10 +43,25 @@ namespace Oxide.Plugins
             public int Kills;
             public int Deaths;
             public int Suicides;
+            public double KDR { get { return (Deaths == 0) ? Kills : (Kills / Deaths); } }
 
-            public override string ToString()
+            public static PlayerData GetPlayer(BasePlayer player)
             {
-                return $"Your stats:\nKills: ({Kills.ToString()})\nDeaths: ({Deaths.ToString()})\nSuicides: ({Suicides.ToString()}) ";
+                PlayerData playerData;
+
+                if (!storage.Stats.TryGetValue(player.userID, out playerData))
+                {
+                    playerData = storage.Stats[player.userID] = new PlayerData();
+                }
+
+                playerData.Name = player.displayName;
+
+                return playerData;
+            }
+
+            public string GetInfo(string Title)
+            {
+                return $"<color=#DC143C>Leaderboard</color>: {Title}\nKills: {Kills.ToString()}\nDeaths: {Deaths.ToString()}\nSuicides: {Suicides.ToString()}\nKDR: {KDR.ToString()}";
             }
         }
 
@@ -105,18 +121,17 @@ namespace Oxide.Plugins
             public int page = 1;
         }
 
-        PlayerData GetStats(BasePlayer player)
+        BasePlayer FindTarget(string nameOrId)
         {
-            PlayerData playerData;
-
-            if (!storage.Stats.TryGetValue(player.userID, out playerData))
+            foreach (BasePlayer player in BasePlayer.allPlayerList)
             {
-                playerData = storage.Stats[player.userID] = new PlayerData();
+                if (player.displayName.Contains(nameOrId, CompareOptions.IgnoreCase) || nameOrId == player.UserIDString)
+                {
+                    return player;
+                }
             }
 
-            playerData.Name = player.displayName;
-
-            return playerData;
+            return null;
         }
         #endregion
 
@@ -385,27 +400,37 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("leaderboard")]
-        void LeaderboardCommand(BasePlayer player, string command, string[] args)
-        {
-            OpenUI(player, 1, RowAmount);
-        }
+        void LeaderboardCommand(BasePlayer player, string command, string[] args) => OpenUI(player, 1, RowAmount);
 
-        [ChatCommand("stats")]
+        [ChatCommand("pinfo")]
         void StatsCommand(BasePlayer player, string command, string[] args)
         {
-            player.ChatMessage(GetStats(player).ToString());
+            if (args.Length != 1)
+            {
+                player.ChatMessage(PlayerData.GetPlayer(player).GetInfo("Your Stats"));
+                return;
+            }
+
+            BasePlayer target = FindTarget(string.Join(" ", args));
+            if (target == null)
+            {
+                player.ChatMessage("No player found.");
+                return;
+            }
+
+            player.ChatMessage(PlayerData.GetPlayer(target).GetInfo($"{target.displayName} Stats"));
         }
         #endregion
 
         #region API
         [HookMethod("RecordKill")]
-        public void RecordKill(BasePlayer player) => GetStats(player).Kills++;
+        public void RecordKill(BasePlayer player) => PlayerData.GetPlayer(player).Kills++;
 
         [HookMethod("RecordDeath")]
-        public void RecordDeath(BasePlayer player) => GetStats(player).Deaths++;
+        public void RecordDeath(BasePlayer player) => PlayerData.GetPlayer(player).Deaths++;
 
         [HookMethod("RecordSuicide")]
-        public void RecordSuicide(BasePlayer player) => GetStats(player).Suicides++;
+        public void RecordSuicide(BasePlayer player) => PlayerData.GetPlayer(player).Suicides++;
         #endregion
     }
 }
