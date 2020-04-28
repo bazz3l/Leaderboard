@@ -28,11 +28,6 @@ namespace Oxide.Plugins
         class StoredData
         {
             public Dictionary<ulong, PlayerData> PlayerStats = new Dictionary<ulong, PlayerData>();
-
-            public StoredData()
-            {
-                //
-            }
         }
 
         class PlayerData
@@ -88,7 +83,10 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnServerSave() => SaveData();
+        void OnServerSave()
+        {
+            SaveData();
+        }
         #endregion
 
         #region Core
@@ -398,7 +396,10 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("leaderboard")]
-        void LeaderboardCommand(BasePlayer player, string command, string[] args) => OpenUI(player, 1, _rowAmount);
+        void LeaderboardCommand(BasePlayer player, string command, string[] args)
+        {
+            OpenUI(player, 1, _rowAmount);
+        }
 
         [ChatCommand("pinfo")]
         void StatsCommand(BasePlayer player, string command, string[] args)
@@ -422,13 +423,22 @@ namespace Oxide.Plugins
 
         #region API
         [HookMethod("RecordKill")]
-        public void RecordKill(BasePlayer player) => PlayerData.GetPlayer(player).Kills++;
+        public void RecordKill(BasePlayer player)
+        {
+            PlayerData.GetPlayer(player).Kills++;
+        }
 
         [HookMethod("RecordDeath")]
-        public void RecordDeath(BasePlayer player) => PlayerData.GetPlayer(player).Deaths++;
+        public void RecordDeath(BasePlayer player)
+        {
+            PlayerData.GetPlayer(player).Deaths++;
+        }
 
         [HookMethod("RecordSuicide")]
-        public void RecordSuicide(BasePlayer player) => PlayerData.GetPlayer(player).Suicides++;
+        public void RecordSuicide(BasePlayer player)
+        {
+            PlayerData.GetPlayer(player).Suicides++;
+        }
         #endregion
     }
 }
