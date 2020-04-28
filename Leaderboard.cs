@@ -9,20 +9,16 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
     [Info("Leaderboard", "Bazz3l", "1.0.4")]
-    [Description("Display player PlayerStats kills deaths and so on.")]
+    [Description("Display players kdr with leaderboard.")]
     class Leaderboard : RustPlugin
     {
         #region Fields
         Dictionary<ulong, PlayerUI> _playersUI = new Dictionary<ulong, PlayerUI>();
         string _leaderboardPanel = "Leaderboard_Panel";
-
         string _statsPanel = "Stats_Panel";
         string _statsPanelHeader = "Stats_Panel_Header";
         string _statsPanelItem = "Stats_Panel_Item";
-
-        // Row Amount
         double _rowAmount = 15;
-        // Column Width
         float _columnWidth = 1f / 5;
         #endregion
 
