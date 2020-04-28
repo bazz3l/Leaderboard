@@ -8,28 +8,30 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Scoreboard", "Bazz3l", "1.0.3")]
-    [Description("Display player stats kills deaths and so on.")]
-    class Scoreboard : RustPlugin
+    [Info("Leaderboard", "Bazz3l", "1.0.4")]
+    [Description("Display player PlayerStats kills deaths and so on.")]
+    class Leaderboard : RustPlugin
     {
         #region Fields
-        Dictionary<ulong, PlayerUI> PlayersUI = new Dictionary<ulong, PlayerUI>();
-        string LeaderboardPanel = "LeaderboardPanel";
-        string StatsPanel = "StatsPanel";
-        string StatsPanelItem = "StatsPanelItem";
-        string StatsPanelHeader = "StatsPanelHeader";
+        Dictionary<ulong, PlayerUI> _playersUI = new Dictionary<ulong, PlayerUI>();
+        string _leaderboardPanel = "Leaderboard_Panel";
+
+        string _statsPanel = "Stats_Panel";
+        string _statsPanelHeader = "Stats_Panel_Header";
+        string _statsPanelItem = "Stats_Panel_Item";
+
         // Row Amount
-        double RowAmount = 15;
+        double _rowAmount = 15;
         // Column Width
-        float ColumnWidth = 1f / 5;
+        float _columnWidth = 1f / 5;
         #endregion
 
-        #region Storage
-        static StoredData storage;
+        #region _data
+        static StoredData _data;
 
         class StoredData
         {
-            public Dictionary<ulong, PlayerData> Stats = new Dictionary<ulong, PlayerData>();
+            public Dictionary<ulong, PlayerData> PlayerStats = new Dictionary<ulong, PlayerData>();
 
             public StoredData()
             {
@@ -49,9 +51,9 @@ namespace Oxide.Plugins
             {
                 PlayerData playerData;
 
-                if (!storage.Stats.TryGetValue(player.userID, out playerData))
+                if (!_data.PlayerStats.TryGetValue(player.userID, out playerData))
                 {
-                    playerData = storage.Stats[player.userID] = new PlayerData();
+                    playerData = _data.PlayerStats[player.userID] = new PlayerData();
                 }
 
                 playerData.Name = player.displayName;
@@ -67,14 +69,14 @@ namespace Oxide.Plugins
 
         void SaveData()
         {
-            Interface.Oxide.DataFileSystem.WriteObject<StoredData>(Name, storage);
+            Interface.Oxide.DataFileSystem.WriteObject<StoredData>(Name, _data);
         }
         #endregion
 
         #region Oxide
         void Init()
         {
-            storage = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+            _data = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
         }
 
         void Unload()
@@ -96,7 +98,7 @@ namespace Oxide.Plugins
         #region Core
         List<PlayerData> GetPlayerData(int page, double takeCount)
         {
-            return storage.Stats.Values.OrderByDescending(i => i.Kills)
+            return _data.PlayerStats.Values.OrderByDescending(i => i.Kills)
             .Skip((page - 1) * (int)takeCount)
             .Take((int)takeCount)
             .ToList();
@@ -106,7 +108,7 @@ namespace Oxide.Plugins
         {
             PlayerUI playerUi;
 
-            if (!PlayersUI.TryGetValue(player.userID, out playerUi))
+            if (!_playersUI.TryGetValue(player.userID, out playerUi))
             {
                 return 1;
             }
@@ -200,14 +202,14 @@ namespace Oxide.Plugins
             });
         }
 
-        void Label(ref CuiElementContainer container, string panelName, string aMin, string aMax,int textSize, string text, TextAnchor anchor = TextAnchor.MiddleCenter)
+        void Label(ref CuiElementContainer container, string panelName, string color, string aMin, string aMax,int textSize, string text, TextAnchor anchor = TextAnchor.MiddleCenter)
         {
             container.Add(new CuiLabel
             {
                 Text = {
                     FontSize = textSize,
                     Text     = text,
-                    Color    = "255 255 255 1",
+                    Color    = color,
                     Align    = anchor,
                 },
                 RectTransform = {
@@ -263,52 +265,52 @@ namespace Oxide.Plugins
             
             PlayerUI playerUI;
 
-            if(!PlayersUI.TryGetValue(player.userID, out playerUI))
+            if(!_playersUI.TryGetValue(player.userID, out playerUI))
             {
-                playerUI = PlayersUI[player.userID] = new PlayerUI();
+                playerUI = _playersUI[player.userID] = new PlayerUI();
             }
 
             playerUI.page = page;
 
             if (playerUI.container == null)
             {
-                playerUI.container = container = CreateElementContainer(LeaderboardPanel, "0.1 0.1 0.1 0.98", "0 0", "1 1", true);
+                playerUI.container = container = CreateElementContainer(_leaderboardPanel, "0.1 0.1 0.1 0.98", "0 0", "1 1", true);
 
-                Label(ref container, LeaderboardPanel, "0.02 0.946", "0.136 0.969", 12, "LEADERBOARD");
-                ButtonCommand(ref container, LeaderboardPanel, "1.2 1.2 1.2 0.24", "0.797 0.94225", "0.875 0.97675", 12, "Next", "stats.next", TextAnchor.MiddleCenter);
-                ButtonCommand(ref container, LeaderboardPanel, "1.2 1.2 1.2 0.24", "0.716 0.94225", "0.794 0.97675", 12, "Prev", "stats.prev", TextAnchor.MiddleCenter);
-                ButtonCommand(ref container, LeaderboardPanel, "1.4 1.4 0.4 0.24", "0.878 0.94225", "0.995 0.97675", 12, "Close", "stats.close", TextAnchor.MiddleCenter);
+                Label(ref container, _leaderboardPanel, "255 255 255 1", "0.02 0.946", "0.136 0.969", 12, "LEADERBOARD");
+                ButtonCommand(ref container, _leaderboardPanel, "1.2 1.2 1.2 0.24", "0.797 0.94225", "0.875 0.97675", 12, "Next", "stats.next", TextAnchor.MiddleCenter);
+                ButtonCommand(ref container, _leaderboardPanel, "1.2 1.2 1.2 0.24", "0.716 0.94225", "0.794 0.97675", 12, "Prev", "stats.prev", TextAnchor.MiddleCenter);
+                ButtonCommand(ref container, _leaderboardPanel, "1.4 1.4 0.4 0.24", "0.878 0.94225", "0.995 0.97675", 12, "Close", "stats.close", TextAnchor.MiddleCenter);
 
                 CuiHelper.AddUi(player, container);
             }
             else
             {
-                container = PlayersUI[player.userID].container;
+                container = _playersUI[player.userID].container;
             }
 
             if (playerUI.panel != null)
             {
-                CuiHelper.DestroyUi(player, StatsPanel);
+                CuiHelper.DestroyUi(player, _statsPanel);
             }
 
-            playerUI.panel = CreatePanel(ref container, LeaderboardPanel, StatsPanel, "0.4 0.4 0.4 0.24", "0 0", "1 0.920");
+            playerUI.panel = CreatePanel(ref container, _leaderboardPanel, _statsPanel, "0.4 0.4 0.4 0.24", "0 0", "1 0.920");
             int panelIndex = container.Count - 1;
 
-            CreatePanel(ref container, StatsPanel, StatsPanelHeader, "1.4 1.4 1.4 0.14", $"0.008 0.930", $"0.992 0.984");
-            Label(ref container, StatsPanelHeader, "0 0", $"{ColumnWidth} 1", 10, "PLAYER");
-            Label(ref container, StatsPanelHeader, $"{ColumnWidth} 0", $"{ColumnWidth * 2} 1", 10, "KILLS");
-            Label(ref container, StatsPanelHeader, $"{ColumnWidth * 2} 0", $"{ColumnWidth * 3} 1", 10, "DEATHS");
-            Label(ref container, StatsPanelHeader, $"{ColumnWidth * 3} 0", $"{ColumnWidth * 4} 1", 10, "SUICIDES");
+            CreatePanel(ref container, _statsPanel, _statsPanelHeader, "1.4 1.4 1.4 0.14", $"0.008 0.930", $"0.992 0.984");
+            Label(ref container, _statsPanelHeader, "255 255 255 1", "0 0", $"{_columnWidth} 1", 10, "PLAYER");
+            Label(ref container, _statsPanelHeader, "255 255 255 1", $"{_columnWidth} 0", $"{_columnWidth * 2} 1", 10, "KILLS");
+            Label(ref container, _statsPanelHeader, "255 255 255 1", $"{_columnWidth * 2} 0", $"{_columnWidth * 3} 1", 10, "DEATHS");
+            Label(ref container, _statsPanelHeader, "255 255 255 1", $"{_columnWidth * 3} 0", $"{_columnWidth * 4} 1", 10, "SUICIDES");
 
             int rowPos = 1;
 
             foreach(PlayerData item in GetPlayerData(page, count))
             {
-                CreatePanel(ref container, StatsPanel, $"{StatsPanelItem}_{rowPos}", "0.4 0.4 0.4 0.24", $"0.008 {0.930 - (rowPos * (0.06))}", $"0.992 {0.986 - (rowPos * (0.06))}");
-                Label(ref container, $"{StatsPanelItem}_{rowPos}", "0 0", $"{ColumnWidth} 1", 10, $"{item.Name}");
-                Label(ref container, $"{StatsPanelItem}_{rowPos}", $"{ColumnWidth} 0", $"{ColumnWidth * 2} 1", 10, $"{item.Kills}");
-                Label(ref container, $"{StatsPanelItem}_{rowPos}", $"{ColumnWidth * 2} 0", $"{ColumnWidth * 3} 1", 10, $"{item.Deaths}");
-                Label(ref container, $"{StatsPanelItem}_{rowPos}", $"{ColumnWidth * 3} 0", $"{ColumnWidth * 4} 1", 10, $"{item.Suicides}");
+                CreatePanel(ref container, _statsPanel, $"{_statsPanelItem}_{rowPos}", "0.4 0.4 0.4 0.24", $"0.008 {0.930 - (rowPos * (0.06))}", $"0.992 {0.986 - (rowPos * (0.06))}");
+                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", "0 0", $"{_columnWidth} 1", 10, $"{item.Name}");
+                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", $"{_columnWidth} 0", $"{_columnWidth * 2} 1", 10, $"{item.Kills}");
+                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", $"{_columnWidth * 2} 0", $"{_columnWidth * 3} 1", 10, $"{item.Deaths}");
+                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", $"{_columnWidth * 3} 0", $"{_columnWidth * 4} 1", 10, $"{item.Suicides}");
                 rowPos++;
             }
 
@@ -318,11 +320,11 @@ namespace Oxide.Plugins
 
         void CloseUI(BasePlayer player)
         {
-            CuiHelper.DestroyUi(player, LeaderboardPanel);
+            CuiHelper.DestroyUi(player, _leaderboardPanel);
 
             PlayerUI playerUi;
 
-            if (!PlayersUI.TryGetValue(player.userID, out playerUi))
+            if (!_playersUI.TryGetValue(player.userID, out playerUi))
             {
                 return;
             }
@@ -346,12 +348,12 @@ namespace Oxide.Plugins
 
             currentPage++;
 
-            if (currentPage < 1 || currentPage > System.Math.Ceiling(storage.Stats.Count / RowAmount))
+            if (currentPage < 1 || currentPage > System.Math.Ceiling(_data.PlayerStats.Count / _rowAmount))
             {
                 return;
             }
 
-            OpenUI(player, currentPage, RowAmount);
+            OpenUI(player, currentPage, _rowAmount);
         }
 
         [ConsoleCommand("stats.prev")]
@@ -367,12 +369,12 @@ namespace Oxide.Plugins
 
             currentPage--;
 
-            if (currentPage < 1 || currentPage > System.Math.Ceiling(storage.Stats.Count / RowAmount))
+            if (currentPage < 1 || currentPage > System.Math.Ceiling(_data.PlayerStats.Count / _rowAmount))
             {
                 return;
             }
 
-            OpenUI(player, currentPage, RowAmount);
+            OpenUI(player, currentPage, _rowAmount);
         }
 
         [ConsoleCommand("stats.open")]
@@ -384,7 +386,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            OpenUI(player, 1, RowAmount);
+            OpenUI(player, 1, _rowAmount);
         }
 
         [ConsoleCommand("stats.close")]
@@ -400,14 +402,14 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("leaderboard")]
-        void LeaderboardCommand(BasePlayer player, string command, string[] args) => OpenUI(player, 1, RowAmount);
+        void LeaderboardCommand(BasePlayer player, string command, string[] args) => OpenUI(player, 1, _rowAmount);
 
         [ChatCommand("pinfo")]
         void StatsCommand(BasePlayer player, string command, string[] args)
         {
             if (args.Length != 1)
             {
-                player.ChatMessage(PlayerData.GetPlayer(player).GetInfo("Your Stats"));
+                player.ChatMessage(PlayerData.GetPlayer(player).GetInfo("Your stats"));
                 return;
             }
 
@@ -418,7 +420,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            player.ChatMessage(PlayerData.GetPlayer(target).GetInfo($"{target.displayName} Stats"));
+            player.ChatMessage(PlayerData.GetPlayer(target).GetInfo($"{target.displayName} stats"));
         }
         #endregion
 
