@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Oxide.Game.Rust.Cui;
@@ -49,7 +50,7 @@ namespace Oxide.Plugins
             public string Name;
             public int Kills;
             public int Deaths;
-            public double KDR => (Deaths == 0) ? Kills : (Kills / Deaths);
+            public double KDR => Deaths > 0 ? Math.Round((double) Kills / Deaths, 2) : Kills;
 
             public static PlayerData GetPlayer(BasePlayer player)
             {
@@ -122,8 +123,8 @@ namespace Oxide.Plugins
 
             UI.Panel(container, LEADERBOARD_PANEL, LEADERBOARD_HEADER, "0 0 0 0", "0 0", "1 1");
             UI.Label(container, LEADERBOARD_HEADER, "255 255 255 1", "0.02 0.946", "0.136 0.969", 12, "LEADERBOARD");
-            UI.Button(container, LEADERBOARD_HEADER, "1.2 1.2 1.2 0.24", "0.797 0.94225", "0.875 0.97675", 12, "Next", $"stats.change {page + 1}");
-            UI.Button(container, LEADERBOARD_HEADER, "1.2 1.2 1.2 0.24", "0.716 0.94225", "0.794 0.97675", 12, "Prev", $"stats.change {page - 1}");
+            UI.Button(container, LEADERBOARD_HEADER, "1.2 1.2 1.2 0.24", "0.797 0.94225", "0.875 0.97675", 12, "►", $"stats.change {page + 1}");
+            UI.Button(container, LEADERBOARD_HEADER, "1.2 1.2 1.2 0.24", "0.716 0.94225", "0.794 0.97675", 12, "◄", $"stats.change {page - 1}");
             UI.Button(container, LEADERBOARD_HEADER, "1.4 1.4 0.4 0.24", "0.878 0.94225", "0.995 0.97675", 12, "Close", "stats.close");            
 
             #endregion
