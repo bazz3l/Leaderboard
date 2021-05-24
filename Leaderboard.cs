@@ -1,42 +1,55 @@
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using Oxide.Game.Rust.Cui;
-using Oxide.Core.Plugins;
 using Oxide.Core;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Leaderboard", "Bazz3l", "1.0.4")]
+    [Info("Leaderboard", "Bazz3l", "1.0.5")]
     [Description("Display players kdr with leaderboard.")]
     class Leaderboard : RustPlugin
     {
         #region Fields
-        Dictionary<ulong, PlayerUI> _playersUI = new Dictionary<ulong, PlayerUI>();
-        string _leaderboardPanel = "Leaderboard_Panel";
-        string _statsPanel = "Stats_Panel";
-        string _statsPanelHeader = "Stats_Panel_Header";
-        string _statsPanelItem = "Stats_Panel_Item";
-        double _rowAmount = 15;
-        float _columnWidth = 1f / 5;
+        
+        private const string LEADERBOARD_PANEL = "Leaderboard_Panel";
+        private const string LEADERBOARD_HEADER = "Leaderboard_Header";
+        private const string STATS_PANEL_HEADER = "Stats_Panel_Header";
+        private const string STATS_PANEL_ITEM = "Stats_Panel_Item";
+        private const string STATS_PANEL = "Stats_Panel";
+        private const float COLUMN_WIDTH = 1f / 5;
+        
         #endregion
 
-        #region _data
-        static StoredData _data;
+        #region Storage
+        
+        private static StoredData _data;
 
-        class StoredData
+        private class StoredData
         {
-            public Dictionary<ulong, PlayerData> PlayerStats = new Dictionary<ulong, PlayerData>();
+            #region Fields
+
+            public readonly Dictionary<ulong, PlayerData> PlayerStats = new Dictionary<ulong, PlayerData>();
+
+            #endregion
+
+            #region IO
+            
+            public static StoredData Load() 
+                => Interface.Oxide.DataFileSystem.ReadObject<StoredData>("Leaderboard");
+            
+            public void Save() 
+                => Interface.Oxide.DataFileSystem.WriteObject("Leaderboard", this);
+            
+            #endregion
         }
 
-        class PlayerData
+        private class PlayerData
         {
             public string Name;
             public int Kills;
             public int Deaths;
-            public int Suicides;
-            public double KDR { get { return (Deaths == 0) ? Kills : (Kills / Deaths); } }
+            public double KDR => (Deaths == 0) ? Kills : (Kills / Deaths);
 
             public static PlayerData GetPlayer(BasePlayer player)
             {
@@ -51,394 +64,253 @@ namespace Oxide.Plugins
 
                 return playerData;
             }
-
-            public string GetInfo(string Title)
-            {
-                return $"<color=#DC143C>Leaderboard</color>: {Title}\nKills: {Kills.ToString()}\nDeaths: {Deaths.ToString()}\nSuicides: {Suicides.ToString()}\nKDR: {KDR.ToString()}";
-            }
         }
 
-        void SaveData()
-        {
-            Interface.Oxide.DataFileSystem.WriteObject<StoredData>(Name, _data);
-        }
         #endregion
 
         #region Oxide
-        void Init()
+        
+        private void Loaded()
         {
-            _data = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+            _data = StoredData.Load();
         }
 
-        void Unload()
+        private void Unload()
         {
-            foreach(BasePlayer player in BasePlayer.activePlayerList)
-            {
-                if (player == null || !player.IsConnected)
-                {
-                    continue;
-                }
-
-                CloseUI(player);
-            }
+            UI.RemoveAll();
+            
+            _data.Save();
         }
 
-        void OnServerSave()
+        private void OnServerSave()
         {
-            SaveData();
+            _data.Save();
         }
+
+        private void OnNewSave(string filename)
+        {
+            _data.PlayerStats.Clear();
+            _data.Save();
+        }
+
         #endregion
 
         #region Core
-        List<PlayerData> GetPlayerData(int page, double takeCount)
+        
+        private IEnumerable<PlayerData> GetPlayerData(int page, int takeCount)
         {
             return _data.PlayerStats.Values.OrderByDescending(i => i.Kills)
-            .Skip((page - 1) * (int)takeCount)
-            .Take((int)takeCount)
-            .ToList();
+            .Skip((page - 1) * takeCount)
+            .Take(takeCount);
         }
 
-        int GetCurrentPage(BasePlayer player)
+        private void OpenUI(BasePlayer player, int page = 1, int count = 15, bool isFirst = false)
         {
-            PlayerUI playerUi;
-
-            if (!_playersUI.TryGetValue(player.userID, out playerUi))
-            {
-                return 1;
-            }
-
-            return playerUi.page;
-        }
-
-        class PlayerUI
-        {
-            public CuiElementContainer container;
-            public CuiPanel panel;
-            public int page = 1;
-        }
-
-        BasePlayer FindTarget(string nameOrId)
-        {
-            foreach (BasePlayer player in BasePlayer.allPlayerList)
-            {
-                if (player.displayName.Contains(nameOrId, CompareOptions.IgnoreCase) || nameOrId == player.UserIDString)
-                {
-                    return player;
-                }
-            }
-
-            return null;
-        }
-        #endregion
-
-        #region UI
-        CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor = false, string parent = "Overlay")
-        {
-            CuiElementContainer element = new CuiElementContainer()
-            {
-                {
-                    new CuiPanel {
-                        CursorEnabled = useCursor,
-                        Image = {
-                            Color    = color,
-                            Material = "assets/content/ui/uibackgroundblur.mat"
-                        },
-                        RectTransform = {
-                            AnchorMin = aMin, 
-                            AnchorMax = aMax
-                        }
-                    },
-                    new CuiElement().Parent = parent,
-                    panelName
-                }
-            };
-
-            return element;
-        }
-
-        CuiPanel CreatePanel(ref CuiElementContainer container, string panel, string name, string color, string aMin, string aMax, bool cursor = false)
-        {
-            CuiPanel cuiPanel = new CuiPanel
-            {
-                Image = { 
-                    Color    = color,
-                    Material = "assets/icons/iconmaterial.mat"
-                },
-                RectTransform = { 
-                    AnchorMin = aMin, 
-                    AnchorMax = aMax 
-                },
-                CursorEnabled = cursor
-            };
-
-            container.Add(cuiPanel, panel, name);
-
-            return cuiPanel;
-        }
-
-        void LoadImagePNG(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
-        {
-            container.Add(new CuiElement
-            {
-                Name       = CuiHelper.GetGuid(),
-                Parent     = panel,
-                FadeOut    = 0.15f,
-                Components = {
-                    new CuiRawImageComponent { 
-                        Png    = png, 
-                        FadeIn = 0.3f 
-                    },
-                    new CuiRectTransformComponent { 
-                        AnchorMin = aMin, 
-                        AnchorMax = aMax 
-                    }
-                }
-            });
-        }
-
-        void Label(ref CuiElementContainer container, string panelName, string color, string aMin, string aMax,int textSize, string text, TextAnchor anchor = TextAnchor.MiddleCenter)
-        {
-            container.Add(new CuiLabel
-            {
-                Text = {
-                    FontSize = textSize,
-                    Text     = text,
-                    Color    = color,
-                    Align    = anchor,
-                },
-                RectTransform = {
-                    AnchorMin = aMin,
-                    AnchorMax = aMax,
-                }
-            }, panelName);
-        }
-
-        void ButtonCommand(ref CuiElementContainer container, string panelName, string color,string aMin, string aMax, int textSize, string text, string command, TextAnchor anchor = TextAnchor.MiddleCenter)
-        {
-            container.Add(new CuiButton
-            {
-                Button = {
-                    Command = command,
-                    Color   = color,
-                },
-                Text = {
-                    FontSize = textSize,
-                    Text     = text,
-                    Align    = anchor,
-                },
-                RectTransform = {
-                    AnchorMin = aMin,
-                    AnchorMax = aMax,
-                }
-            }, panelName);
-        }
-
-        void ButtonClose(ref CuiElementContainer container, string panelName, string color,string aMin, string aMax, int textSize, string text, TextAnchor anchor = TextAnchor.MiddleCenter)
-        {
-            container.Add(new CuiButton
-            {
-                Button = {
-                    Close = panelName,
-                    Color = color,
-                },
-                Text = {
-                    FontSize = textSize,
-                    Text     = text,
-                    Align    = anchor,
-                },
-                RectTransform = {
-                    AnchorMin = aMin,
-                    AnchorMax = aMax,
-                }
-            }, panelName);
-        }
-
-        void OpenUI(BasePlayer player, int page = 1, double count = 15)
-        {
-            CuiElementContainer container;
+            CuiElementContainer container = new CuiElementContainer();
             
-            PlayerUI playerUI;
-
-            if(!_playersUI.TryGetValue(player.userID, out playerUI))
+            if (isFirst)
             {
-                playerUI = _playersUI[player.userID] = new PlayerUI();
+                CuiHelper.DestroyUi(player, LEADERBOARD_PANEL);
+                
+                container = UI.CreateElementContainer(LEADERBOARD_PANEL, "0.1 0.1 0.1 0.98", "0 0", "1 1", true);
+            }
+            
+            CuiHelper.DestroyUi(player, LEADERBOARD_HEADER);
+            CuiHelper.DestroyUi(player, STATS_PANEL);
+
+            #region Header
+
+            UI.Panel(container, LEADERBOARD_PANEL, LEADERBOARD_HEADER, "0 0 0 0", "0 0", "1 1");
+            UI.Label(container, LEADERBOARD_HEADER, "255 255 255 1", "0.02 0.946", "0.136 0.969", 12, "LEADERBOARD");
+            UI.Button(container, LEADERBOARD_HEADER, "1.2 1.2 1.2 0.24", "0.797 0.94225", "0.875 0.97675", 12, "Next", $"stats.change {page + 1}");
+            UI.Button(container, LEADERBOARD_HEADER, "1.2 1.2 1.2 0.24", "0.716 0.94225", "0.794 0.97675", 12, "Prev", $"stats.change {page - 1}");
+            UI.Button(container, LEADERBOARD_HEADER, "1.4 1.4 0.4 0.24", "0.878 0.94225", "0.995 0.97675", 12, "Close", "stats.close");            
+
+            #endregion
+
+            #region Stats
+            
+            int totalPages = 0;
+
+            if (_data.PlayerStats.Values.Count > 0)
+            {
+                totalPages = _data.PlayerStats.Values.Count / count;
             }
 
-            playerUI.page = page;
-
-            if (playerUI.container == null)
+            if (page < 0 || page > totalPages)
             {
-                playerUI.container = container = CreateElementContainer(_leaderboardPanel, "0.1 0.1 0.1 0.98", "0 0", "1 1", true);
-
-                Label(ref container, _leaderboardPanel, "255 255 255 1", "0.02 0.946", "0.136 0.969", 12, "LEADERBOARD");
-                ButtonCommand(ref container, _leaderboardPanel, "1.2 1.2 1.2 0.24", "0.797 0.94225", "0.875 0.97675", 12, "Next", "stats.next", TextAnchor.MiddleCenter);
-                ButtonCommand(ref container, _leaderboardPanel, "1.2 1.2 1.2 0.24", "0.716 0.94225", "0.794 0.97675", 12, "Prev", "stats.prev", TextAnchor.MiddleCenter);
-                ButtonCommand(ref container, _leaderboardPanel, "1.4 1.4 0.4 0.24", "0.878 0.94225", "0.995 0.97675", 12, "Close", "stats.close", TextAnchor.MiddleCenter);
-
-                CuiHelper.AddUi(player, container);
+                page = 0;
             }
-            else
-            {
-                container = _playersUI[player.userID].container;
-            }
-
-            if (playerUI.panel != null)
-            {
-                CuiHelper.DestroyUi(player, _statsPanel);
-            }
-
-            playerUI.panel = CreatePanel(ref container, _leaderboardPanel, _statsPanel, "0.4 0.4 0.4 0.24", "0 0", "1 0.920");
-            int panelIndex = container.Count - 1;
-
-            CreatePanel(ref container, _statsPanel, _statsPanelHeader, "1.4 1.4 1.4 0.14", $"0.008 0.930", $"0.992 0.984");
-            Label(ref container, _statsPanelHeader, "255 255 255 1", "0 0", $"{_columnWidth} 1", 10, "PLAYER");
-            Label(ref container, _statsPanelHeader, "255 255 255 1", $"{_columnWidth} 0", $"{_columnWidth * 2} 1", 10, "KILLS");
-            Label(ref container, _statsPanelHeader, "255 255 255 1", $"{_columnWidth * 2} 0", $"{_columnWidth * 3} 1", 10, "DEATHS");
-            Label(ref container, _statsPanelHeader, "255 255 255 1", $"{_columnWidth * 3} 0", $"{_columnWidth * 4} 1", 10, "SUICIDES");
+            
+            UI.Panel(container, LEADERBOARD_PANEL, STATS_PANEL, "0.4 0.4 0.4 0.24", "0 0", "1 0.920");
+            UI.Panel(container, STATS_PANEL, STATS_PANEL_HEADER, "1.4 1.4 1.4 0.14", $"0.008 0.930", $"0.992 0.984");
+            UI.Label(container, STATS_PANEL_HEADER, "255 255 255 1", "0 0", $"{COLUMN_WIDTH} 1", 10, "PLAYER");
+            UI.Label(container, STATS_PANEL_HEADER, "255 255 255 1", $"{COLUMN_WIDTH} 0", $"{COLUMN_WIDTH * 2} 1", 10, "KILLS");
+            UI.Label(container, STATS_PANEL_HEADER, "255 255 255 1", $"{COLUMN_WIDTH * 2} 0", $"{COLUMN_WIDTH * 3} 1", 10, "DEATHS");
+            UI.Label(container, STATS_PANEL_HEADER, "255 255 255 1", $"{COLUMN_WIDTH * 3} 0", $"{COLUMN_WIDTH * 4} 1", 10, "KDR");
 
             int rowPos = 1;
 
             foreach(PlayerData item in GetPlayerData(page, count))
             {
-                CreatePanel(ref container, _statsPanel, $"{_statsPanelItem}_{rowPos}", "0.4 0.4 0.4 0.24", $"0.008 {0.930 - (rowPos * (0.06))}", $"0.992 {0.986 - (rowPos * (0.06))}");
-                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", "0 0", $"{_columnWidth} 1", 10, $"{item.Name}");
-                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", $"{_columnWidth} 0", $"{_columnWidth * 2} 1", 10, $"{item.Kills}");
-                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", $"{_columnWidth * 2} 0", $"{_columnWidth * 3} 1", 10, $"{item.Deaths}");
-                Label(ref container, $"{_statsPanelItem}_{rowPos}", "255 255 255 1", $"{_columnWidth * 3} 0", $"{_columnWidth * 4} 1", 10, $"{item.Suicides}");
+                UI.Panel(container, STATS_PANEL, $"{STATS_PANEL_ITEM}_{rowPos}", "0.4 0.4 0.4 0.24", $"0.008 {0.930 - (rowPos * (0.06))}", $"0.992 {0.986 - (rowPos * (0.06))}");
+                UI.Label(container, $"{STATS_PANEL_ITEM}_{rowPos}", "255 255 255 1", "0 0", $"{COLUMN_WIDTH} 1", 10, $"{item.Name}");
+                UI.Label(container, $"{STATS_PANEL_ITEM}_{rowPos}", "255 255 255 1", $"{COLUMN_WIDTH} 0", $"{COLUMN_WIDTH * 2} 1", 10, $"{item.Kills}");
+                UI.Label(container, $"{STATS_PANEL_ITEM}_{rowPos}", "255 255 255 1", $"{COLUMN_WIDTH * 2} 0", $"{COLUMN_WIDTH * 3} 1", 10, $"{item.Deaths}");
+                UI.Label(container, $"{STATS_PANEL_ITEM}_{rowPos}", "255 255 255 1", $"{COLUMN_WIDTH * 3} 0", $"{COLUMN_WIDTH * 4} 1", 10, $"{item.KDR}");
                 rowPos++;
             }
 
-            CuiHelper.AddUi(player, container.Skip(panelIndex).Take(container.Count - panelIndex).ToList());
-            container.RemoveRange(panelIndex, container.Count - panelIndex);
+            #endregion
+
+            CuiHelper.AddUi(player, container);
         }
 
-        void CloseUI(BasePlayer player)
+        private void CloseUI(BasePlayer player)
         {
-            CuiHelper.DestroyUi(player, _leaderboardPanel);
+            UI.RemoveUI(player);
+        }
+        
+        #endregion
 
-            PlayerUI playerUi;
+        #region UI
 
-            if (!_playersUI.TryGetValue(player.userID, out playerUi))
+        private static class UI
+        {
+            public static CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor = false, string parent = "Overlay")
             {
-                return;
+                CuiElementContainer element = new CuiElementContainer()
+                {
+                    {
+                        new CuiPanel {
+                            CursorEnabled = useCursor,
+                            Image = {
+                                Color    = color,
+                                Material = "assets/content/ui/uibackgroundblur.mat"
+                            },
+                            RectTransform = {
+                                AnchorMin = aMin, 
+                                AnchorMax = aMax
+                            }
+                        },
+                        new CuiElement().Parent = parent,
+                        panelName
+                    }
+                };
+
+                return element;
             }
 
-            playerUi.container = null;
-            playerUi.panel = null;
+            public static void Panel(CuiElementContainer container, string parentName, string panelName, string color, string aMin, string aMax, bool cursor = false)
+            {
+                container.Add(new CuiPanel
+                {
+                    CursorEnabled = cursor,
+                    Image = { 
+                        Color    = color,
+                        Material = "assets/icons/iconmaterial.mat"
+                    },
+                    RectTransform = { 
+                        AnchorMin = aMin, 
+                        AnchorMax = aMax 
+                    }
+                }, parentName, panelName);
+            }
+            
+            public static void Label(CuiElementContainer container, string parentName, string color, string aMin, string aMax,int textSize, string text, TextAnchor anchor = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiLabel
+                {
+                    Text = {
+                        FontSize = textSize,
+                        Text     = text,
+                        Color    = color,
+                        Align    = anchor,
+                    },
+                    RectTransform = {
+                        AnchorMin = aMin,
+                        AnchorMax = aMax,
+                    }
+                }, parentName);
+            }
+
+            public static void Button(CuiElementContainer container, string parentName, string color,string aMin, string aMax, int textSize, string text, string command, TextAnchor anchor = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiButton
+                {
+                    Button = {
+                        Command = command,
+                        Color   = color,
+                    },
+                    Text = {
+                        FontSize = textSize,
+                        Text     = text,
+                        Align    = anchor,
+                    },
+                    RectTransform = {
+                        AnchorMin = aMin,
+                        AnchorMax = aMax,
+                    }
+                }, parentName);
+            }
+            
+            public static void RemoveUI(BasePlayer player) => CuiHelper.DestroyUi(player, LEADERBOARD_PANEL);
+                
+            public static void RemoveAll()
+            {
+                foreach (BasePlayer player in BasePlayer.activePlayerList)
+                {
+                    RemoveUI(player);
+                }
+            }
         }
+
         #endregion
 
         #region Commands
-        [ConsoleCommand("stats.next")]
-        void NextPage(ConsoleSystem.Arg arg)
+
+        #region Chat
+
+        [ChatCommand("leaderboard")]
+        private void LeaderboardCommand(BasePlayer player, string command, string[] args)
+            => OpenUI(player, 1, 10, true);
+
+        #endregion
+
+        #region Console
+
+        [ConsoleCommand("stats.change")]
+        private void PrevPage(ConsoleSystem.Arg arg)
         {
             BasePlayer player = arg.Player();
-            if (player == null)
-            {
-                return;
-            }
-
-            int currentPage = GetCurrentPage(player);
-
-            currentPage++;
-
-            if (currentPage < 1 || currentPage > System.Math.Ceiling(_data.PlayerStats.Count / _rowAmount))
-            {
-                return;
-            }
-
-            OpenUI(player, currentPage, _rowAmount);
-        }
-
-        [ConsoleCommand("stats.prev")]
-        void PrevPage(ConsoleSystem.Arg arg)
-        {
-            BasePlayer player = arg.Player();
-            if (player == null)
-            {
-                return;
-            }
-
-            int currentPage = GetCurrentPage(player);
-
-            currentPage--;
-
-            if (currentPage < 1 || currentPage > System.Math.Ceiling(_data.PlayerStats.Count / _rowAmount))
-            {
-                return;
-            }
-
-            OpenUI(player, currentPage, _rowAmount);
-        }
-
-        [ConsoleCommand("stats.open")]
-        void Open(ConsoleSystem.Arg arg)
-        {
-            BasePlayer player = arg.Player();
-            if (player == null)
-            {
-                return;
-            }
-
-            OpenUI(player, 1, _rowAmount);
+            if (player == null) return;
+            OpenUI(player, arg.GetInt(0), 10);
         }
 
         [ConsoleCommand("stats.close")]
-        void Close(ConsoleSystem.Arg arg)
+        private void Close(ConsoleSystem.Arg arg)
         {
             BasePlayer player = arg.Player();
-            if (player == null)
-            {
-                return;
-            }
-
+            if (player == null) return;
             CloseUI(player);
-        }
+        }        
 
-        [ChatCommand("leaderboard")]
-        void LeaderboardCommand(BasePlayer player, string command, string[] args)
-        {
-            OpenUI(player, 1, _rowAmount);
-        }
+        #endregion
 
-        [ChatCommand("pinfo")]
-        void StatsCommand(BasePlayer player, string command, string[] args)
-        {
-            if (args.Length != 1)
-            {
-                player.ChatMessage(PlayerData.GetPlayer(player).GetInfo("Your stats"));
-                return;
-            }
-
-            BasePlayer target = FindTarget(string.Join(" ", args));
-            if (target == null)
-            {
-                player.ChatMessage("No player found.");
-                return;
-            }
-
-            player.ChatMessage(PlayerData.GetPlayer(target).GetInfo($"{target.displayName} stats"));
-        }
         #endregion
 
         #region API
-        [HookMethod("RecordKill")]
+        
         public void RecordKill(BasePlayer player)
         {
             PlayerData.GetPlayer(player).Kills++;
         }
-
-        [HookMethod("RecordDeath")]
+        
         public void RecordDeath(BasePlayer player)
         {
             PlayerData.GetPlayer(player).Deaths++;
         }
 
-        [HookMethod("RecordSuicide")]
-        public void RecordSuicide(BasePlayer player)
-        {
-            PlayerData.GetPlayer(player).Suicides++;
-        }
         #endregion
     }
 }
